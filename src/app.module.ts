@@ -4,7 +4,7 @@ import { ExecutionsModule } from './executions/executions.module';
 import { BullModule } from '@nestjs/bull';
 import { QueueModule } from './queue/queue.module';
 import { ModelsModule } from './models/models.module';
-
+   
 @Module({
   imports: [
     BullModule.forRoot({

@@ -29,5 +29,6 @@ async function bootstrap() {
   });
 
   await app.listen(3000);
+  console.log('🚀 Backend запущен на http://localhost:3000');
 }
 bootstrap();

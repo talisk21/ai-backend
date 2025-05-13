@@ -4,7 +4,9 @@ import { ExecutionsModule } from './executions/executions.module';
 import { BullModule } from '@nestjs/bull';
 import { QueueModule } from './queue/queue.module';
 import { ModelsModule } from './models/models.module';
-   
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
 @Module({
   imports: [
     BullModule.forRoot({
@@ -18,7 +20,8 @@ import { ModelsModule } from './models/models.module';
     QueueModule,
     ModelsModule,
   ],
-  controllers: [],
-  providers: [],
+  controllers: [AppController],
+  providers: [AppService],
 })
+
 export class AppModule {}

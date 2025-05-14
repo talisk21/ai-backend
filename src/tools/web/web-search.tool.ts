@@ -1,4 +1,4 @@
-import { Tool } from './tool.interface';
+import { Tool } from '../tool.interface';
 
 export class WebSearchTool implements Tool {
   name = 'web_search';

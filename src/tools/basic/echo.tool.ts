@@ -1,4 +1,4 @@
-import { Tool } from './tool.interface';
+import { Tool } from '../tool.interface';
 
 export class EchoTool implements Tool {
   name = 'echo';

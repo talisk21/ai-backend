@@ -1,4 +1,4 @@
-import { Tool } from './tool.interface';
+import { Tool } from '../tool.interface';
 import { evaluate } from 'mathjs';
 
 export class MathTool implements Tool {

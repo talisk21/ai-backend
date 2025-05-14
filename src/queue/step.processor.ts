@@ -76,7 +76,7 @@ export class StepProcessor {
         this.logger.log(`🛠 Tool вызван: ${name} | args: ${JSON.stringify(args)}`);
         await this.log.debug(`Tool "${name}" args:`, 'StepProcessor', { stepId, args });
 
-        const resultText = await this.toolExecutor.execute({ name, args });
+        const resultText = await this.toolExecutor.run(name, args);
         const output: StepOutput = { result: resultText };
 
         await this.prisma.step.update({

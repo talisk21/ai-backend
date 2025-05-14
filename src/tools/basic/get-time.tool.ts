@@ -1,4 +1,4 @@
-import { Tool } from './tool.interface';
+import { Tool } from '../tool.interface';
 import { DateTime } from 'luxon';
 
 export class GetTimeTool implements Tool {

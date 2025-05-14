@@ -8,6 +8,7 @@ export interface ChatMessage {
 export interface AgentInput {
   model: string;
   messages: ChatMessage[];
+  prompt?: string;
 }
 
 export interface AgentOutput {

@@ -1,4 +1,4 @@
-import { Tool } from './tool.interface';
+import { Tool } from '../tool.interface';
 
 export class ClearContextTool implements Tool {
   name = 'clear_context';

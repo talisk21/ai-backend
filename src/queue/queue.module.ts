@@ -5,6 +5,8 @@ import { STEP_QUEUE } from './queue.constants';
 import { OpenRouterService } from '../agents/openrouter.service';
 import { AgentGatewayService } from '../agents/agent-gateway.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { LogModule } from '../log/log.module';
+import { ToolsModule } from '../tools/tools.module';
 
 @Module({
   imports: [
@@ -12,6 +14,8 @@ import { PrismaModule } from '../prisma/prisma.module';
     BullModule.registerQueue({
       name: STEP_QUEUE,
     }),
+    LogModule,
+    ToolsModule,
   ],
   providers: [
     StepProcessor,

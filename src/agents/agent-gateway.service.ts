@@ -1,35 +1,41 @@
 import { Injectable } from '@nestjs/common';
 import { OpenRouterService } from './openrouter.service';
-
-export interface AgentChatInput {
-  model: string;
-  prompt?: string;
-  messages?: { role: 'user' | 'assistant' | 'system'; content: string }[];
-}
+import { Agent, AgentInput, AgentOutput } from './agent.interface';
+import { LLmAgent } from './llm-agent';
+import { LlmToolAgent } from './llm-tool-agent';
+import { ToolExecutorService } from '../tools/tool-executor.service';
+import { LogService } from '../log/log.service';
 
 @Injectable()
 export class AgentGatewayService {
-  constructor(private openRouter: OpenRouterService) {}
+  private readonly agents: Record<string, Agent>;
 
-  async chat(input: AgentChatInput): Promise<string> {
-    const { model, prompt, messages } = input;
+  constructor(
+    private openRouter: OpenRouterService,
+    private tools: ToolExecutorService,
+    private log: LogService,
+  ) {
+    this.agents = {
+      'llm-agent': new LLmAgent(this.openRouter, this.log),
+      'llm-tool-agent': new LlmToolAgent(this.openRouter, this.tools, this.log),
+    };
+  }
 
-    // Поддерживаем модели OpenRouter и похожие
-    switch (true) {
-      case model.startsWith('openai/'):
-      case model.startsWith('mistral'):
-      case model.startsWith('claude'):
-      case model.startsWith('anthropic/'):
-      case model.startsWith('meta/'):
-      case model.startsWith('google/'):
-      case model.startsWith('perplexity/'):
-      case model.startsWith('nousresearch/'):
-      case model.startsWith('gryphe/'):
-      case model.startsWith('togethercomputer/'):
-        return this.openRouter.chat({ model, prompt, messages });
+  // Метод для выполнения задачи через нужного агента
+  async chat(input: AgentInput, agentName = 'llm-agent'): Promise<string> {
+    const agent = this.agents[agentName];
+    if (!agent) throw new Error(`Agent "${agentName}" не найден`);
 
-      default:
-        throw new Error(`Unsupported model: ${model}`);
-    }
+    const output: AgentOutput = await agent.run(input);
+    return output.result;
+  }
+
+  // Прямой вызов OpenRouter без логики агентов
+  async callLLM(input: AgentInput): Promise<string> {
+    return this.openRouter.chat({
+      model: input.model,
+      prompt: input.messages.at(-1)?.content ?? '',
+      messages: input.messages,
+    });
   }
 }

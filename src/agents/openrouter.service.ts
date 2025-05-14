@@ -1,25 +1,31 @@
-import { Injectable } from '@nestjs/common';
-import { ChatMessage } from '../types/chat';
 import axios from 'axios';
+import { Injectable } from '@nestjs/common';
 
-interface ChatOptions {
-  model: string;
-  prompt?: string;
-  messages?: ChatMessage[];
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
 }
 
 @Injectable()
 export class OpenRouterService {
   private apiKey = process.env.OPENROUTER_API_KEY;
 
-  async chat(options: ChatOptions): Promise<string> {
-    const { model, prompt, messages } = options;
+  async chat(input: {
+    model: string;
+    messages?: ChatMessage[];
+    prompt?: string;
+  }): Promise<string> {
+    const { model, messages = [], prompt } = input;
 
-    // Если явно передан массив messages, используем его
-    const finalMessages: ChatMessage[] =
-      messages && messages.length > 0
-        ? messages
-        : [{ role: 'user', content: prompt ?? '' }];
+    const finalMessages: ChatMessage[] = messages.length
+      ? messages
+      : prompt
+        ? [{ role: 'user', content: prompt }]
+        : [];
+
+    if (finalMessages.length === 0) {
+      throw new Error('❌ Не указаны ни prompt, ни messages');
+    }
 
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -31,7 +37,7 @@ export class OpenRouterService {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost', // настрой по необходимости
+          'HTTP-Referer': 'http://localhost',
           'X-Title': 'ai-platform',
         },
       },

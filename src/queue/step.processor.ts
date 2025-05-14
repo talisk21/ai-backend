@@ -4,16 +4,16 @@ import { Job } from 'bull';
 import { STEP_QUEUE } from './queue.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgentGatewayService } from '../agents/agent-gateway.service';
+import { LogService } from '../log/log.service';
+import { ToolExecutorService } from '../tools/tool-executor.service';
 import { Prisma } from '@prisma/client';
 
-// Тип сообщения для модели
 type ChatRole = 'user' | 'assistant';
 interface ChatMessage {
   role: ChatRole;
   content: string;
 }
 
-// Типы входа/выхода шага
 interface StepInput {
   question: string;
   model: string;
@@ -31,27 +31,64 @@ export class StepProcessor {
   constructor(
     private prisma: PrismaService,
     private agentGateway: AgentGatewayService,
+    private log: LogService,
+    private toolExecutor: ToolExecutorService,
   ) {}
 
-  @Process()
+  @Process('default')
   async handleStep(job: Job) {
     const { stepId } = job.data;
 
-    const step = await this.prisma.step.findUnique({
-      where: { id: stepId },
-    });
-
+    const step = await this.prisma.step.findUnique({ where: { id: stepId } });
     if (!step) {
-      this.logger.warn(`Step not found: ${stepId}`);
+      const msg = `Step not found: ${stepId}`;
+      this.logger.warn(msg);
+      await this.log.warn(msg, 'StepProcessor', { stepId });
       return;
     }
 
     try {
       const input = step.input as unknown as StepInput;
+      const question = input.question?.trim();
+      const model = input.model;
 
-      this.logger.log(`[StepProcessor] Выполняется stepId: ${stepId} | model: ${input.model}`);
+      const startMsg = `▶️ Выполняется stepId: ${stepId} | model: ${model}`;
+      this.logger.log(startMsg);
+      await this.log.info(startMsg, 'StepProcessor', {
+        stepId,
+        executionId: step.executionId,
+        model,
+        input: question,
+      });
 
-      // Получаем все шаги выполнения
+      // --- ВЫПОЛНЕНИЕ TOOL ---
+      if (question?.startsWith('tool:')) {
+        const [rawName, rawArgs] = question.split(/ (.+)/);
+        const name = rawName.replace('tool:', '').trim();
+
+        let args: any = {};
+        try {
+          args = rawArgs ? JSON.parse(rawArgs) : {};
+        } catch {
+          args = rawArgs?.trim();
+        }
+
+        this.logger.log(`🛠 Tool вызван: ${name} | args: ${JSON.stringify(args)}`);
+        await this.log.debug(`Tool "${name}" args:`, 'StepProcessor', { stepId, args });
+
+        const resultText = await this.toolExecutor.execute({ name, args });
+        const output: StepOutput = { result: resultText };
+
+        await this.prisma.step.update({
+          where: { id: stepId },
+          data: { output: output as unknown as Prisma.InputJsonValue },
+        });
+
+        await this.log.info(`✅ Tool "${name}" выполнен`, 'StepProcessor', { stepId, output });
+        return true;
+      }
+
+      // --- Обычный AGENT шаг ---
       const execution = await this.prisma.execution.findUnique({
         where: { id: step.executionId },
         include: { steps: { orderBy: { createdAt: 'asc' } } },
@@ -62,20 +99,17 @@ export class StepProcessor {
       for (const s of execution?.steps || []) {
         const sInput = s.input as unknown as StepInput;
         const sOutput = s.output as unknown as StepOutput;
-
         if (sInput?.question && sOutput?.result) {
           messages.push({ role: 'user', content: sInput.question });
           messages.push({ role: 'assistant', content: sOutput.result });
         }
       }
 
-      // Добавляем текущий шаг как последний user input
-      messages.push({ role: 'user', content: input.question });
+      messages.push({ role: 'user', content: question });
 
-      // Обращаемся к агенту
       const resultText = await this.agentGateway.chat({
-        model: input.model,
-        prompt: input.question,
+        model,
+        prompt: question,
         messages,
       });
 
@@ -83,20 +117,29 @@ export class StepProcessor {
 
       await this.prisma.step.update({
         where: { id: stepId },
-        data: {
-          output: output as unknown as Prisma.InputJsonValue,
-        },
+        data: { output: output as unknown as Prisma.InputJsonValue },
+      });
+
+      const doneMsg = `✅ Step выполнен: ${stepId}`;
+      this.logger.log(doneMsg);
+      await this.log.info(doneMsg, 'StepProcessor', {
+        stepId,
+        result: resultText,
       });
 
       return true;
     } catch (error: any) {
-      this.logger.error(`Step ${stepId} failed`, error.stack);
-
+      const errorMsg = `❌ Ошибка в step ${stepId}: ${error.message}`;
+      this.logger.error(errorMsg, error.stack);
       await this.prisma.step.update({
         where: { id: stepId },
         data: {
           error: error.message || 'Unknown error',
         },
+      });
+      await this.log.error(errorMsg, 'StepProcessor', {
+        stepId,
+        stack: error.stack,
       });
     }
   }

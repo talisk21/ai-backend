@@ -26,3 +26,24 @@ model Step {
 
   execution    Execution @relation(fields: [executionId], references: [id])
 }
+
+model Log {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  level     String   // 'info', 'error', 'debug', 'warn'
+  message   String
+  context   String?  // например: 'StepProcessor', 'ExecutionsController'
+  metadata  Json?    // любое доп. содержимое (userId, stepId и т.п.)
+}
+
+model RequestLog {
+  id        String   @id @default(uuid())
+  method    String
+  url       String
+  status    Int
+  duration  Int
+  timestamp DateTime @default(now())
+  body      Json?
+  query     Json?
+  headers   Json?
+}

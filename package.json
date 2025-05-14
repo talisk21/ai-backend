@@ -29,10 +29,15 @@
     "@prisma/client": "^6.7.0",
     "axios": "^1.9.0",
     "bull": "^4.16.5",
+    "cheerio": "^1.0.0",
+    "franc": "^6.2.0",
     "ioredis": "^5.6.1",
+    "mathjs": "^14.4.0",
     "prisma": "^6.7.0",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "stopword": "^3.1.4",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

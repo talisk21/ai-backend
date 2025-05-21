@@ -1,38 +1,49 @@
-import { Injectable } from '@nestjs/common';
-import { toolRegistry } from './tool-registry';
-import { LogService } from '../log/log.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { Tool, ToolInputSpecField } from "./tool.interface";
+import { toolRegistry } from "./tool-registry";
+
 
 @Injectable()
 export class ToolExecutorService {
-  constructor(private readonly log: LogService) {}
+  private readonly tools: Map<string, Tool> = new Map();
+  private readonly logger = new Logger(ToolExecutorService.name);
 
-  async run(toolName: string, input: any): Promise<string> {
-    const tool = toolRegistry.find((t) => t.name === toolName);
-
-    if (!tool) {
-      const message = `❌ Неизвестный инструмент: ${toolName}`;
-      await this.log.error(message, 'ToolExecutorService', { toolName, input });
-      throw new Error(message);
+  constructor() {
+    for (const tool of toolRegistry) {
+      this.tools.set(tool.name, tool);
     }
+  }
+
+  /**
+   * Выполняет инструмент по имени
+   */
+  async run(name: string, args: any): Promise<string> {
+    const tool = this.tools.get(name);
+    if (!tool) {
+      this.logger.log(`❌ Инструмент "${name}" не найден`);
+      throw new Error(`Инструмент "${name}" не найден`);
+    }
+
+    this.logger.log(`▶️ Запуск инструмента "${name}" с аргументами: ${JSON.stringify(args)}`);
 
     try {
-      const output = await tool.run(input);
-
-      await this.log.info(`🛠️ Выполнен инструмент: ${toolName}`, 'ToolExecutorService', {
-        tool: toolName,
-        input,
-        output,
-      });
-
-      return output;
+      const result = await tool.run(args);
+      this.logger.log(`✅ Результат "${name}": ${result}`);
+      return result;
     } catch (error: any) {
-      await this.log.error(`❌ Ошибка в инструменте: ${toolName}`, 'ToolExecutorService', {
-        tool: toolName,
-        input,
-        error: error.message,
-      });
-
-      return `❌ Ошибка при выполнении инструмента "${toolName}": ${error.message}`;
+      this.logger.log(`❌ Ошибка при выполнении "${name}": ${error.message}`);
+      throw error;
     }
+  }
+
+  /**
+   * Возвращает список всех инструментов с описанием
+   */
+  getToolList(): { name: string; description: string; spec?: ToolInputSpecField[] }[] {
+    return Array.from(this.tools.values()).map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      spec: tool?.inputSpec
+    }));
   }
 }

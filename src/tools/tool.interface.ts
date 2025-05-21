@@ -3,7 +3,18 @@ export interface ToolInput {
   args?: any;
 }
 
+export interface ToolInputSpecField {
+  name: string;
+  type: "string" | "number" | "boolean" | "object" | "date" | "array";
+  itemsType?: "string" | "number" | "boolean" | "object" | "date" | "array",
+  required: boolean;
+  description?: string;
+}
+
 export interface Tool {
   name: string;
-  run(args: any): Promise<string>;
+  description: string;
+  inputSpec?: ToolInputSpecField[];
+
+  run(input: any): Promise<any>;
 }

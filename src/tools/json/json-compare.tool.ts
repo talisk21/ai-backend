@@ -1,13 +1,28 @@
-import { Tool } from '../tool.interface';
+import { Tool, ToolInputSpecField } from "../tool.interface";
 
 export class JsonCompareTool implements Tool {
-  name = 'json_compare';
-  description = 'Сравнивает два JSON-объекта и возвращает отличающиеся ключи';
+  name = "json_compare";
+  description = "Сравнивает два JSON-объекта и возвращает список отличающихся ключей. Показывает, какие поля присутствуют только в одном из объектов, а также поля с различиями.";
+
+  inputSpec: ToolInputSpecField[] = [
+    {
+      name: "a",
+      type: "object",
+      required: true,
+      description: "Первый JSON-объект для сравнения."
+    },
+    {
+      name: "b",
+      type: "object",
+      required: true,
+      description: "Второй JSON-объект для сравнения."
+    }
+  ];
 
   async run(input: { a: any; b: any }): Promise<string> {
     const diff: string[] = [];
 
-    function compare(obj1: any, obj2: any, path = '') {
+    function compare(obj1: any, obj2: any, path = "") {
       for (const key in obj1) {
         const fullPath = path ? `${path}.${key}` : key;
         if (!(key in obj2)) {
@@ -27,6 +42,6 @@ export class JsonCompareTool implements Tool {
 
     compare(input.a, input.b);
 
-    return diff.length ? diff.join('\n') : '✅ Объекты идентичны';
+    return diff.length ? diff.join("\n") : "✅ Объекты идентичны";
   }
 }

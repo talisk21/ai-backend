@@ -9,31 +9,35 @@ datasource db {
 
 model Execution {
   id        String   @id @default(uuid())
+  userId String @default("UI")
   status    String
   startedAt DateTime @default(now())
   finishedAt DateTime?
   steps     Step[]
+  files  File[]
 }
 
 model Step {
-  id           String   @id @default(uuid())
-  executionId  String
-  type         String   // "agent", "api", "tool"
-  input        Json
-  output       Json?
-  error        String?
-  createdAt    DateTime @default(now())
-
-  execution    Execution @relation(fields: [executionId], references: [id])
+  id          String    @id @default(uuid())
+  executionId String
+  type        String // "agent", "api", "tool"
+  input       Json
+  output      Json?
+  source      String?
+  userId      String?
+  error       String?
+  createdAt   DateTime  @default(now())
+  files       File[]
+  execution   Execution @relation(fields: [executionId], references: [id])
 }
 
 model Log {
   id        String   @id @default(uuid())
   timestamp DateTime @default(now())
-  level     String   // 'info', 'error', 'debug', 'warn'
+  level    String
   message   String
-  context   String?  // например: 'StepProcessor', 'ExecutionsController'
-  metadata  Json?    // любое доп. содержимое (userId, stepId и т.п.)
+  context  String?
+  metadata Json?
 }
 
 model RequestLog {
@@ -46,4 +50,38 @@ model RequestLog {
   body      Json?
   query     Json?
   headers   Json?
+}
+
+model MailAccount {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  smtpHost  String
+  smtpPort  Int
+  smtpUser  String
+  smtpPass  String
+  imapHost  String
+  imapPort  Int
+  imapUser  String
+  imapPass  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model File {
+  id              String     @id @default(uuid())
+  name            String
+  url             String
+  size            Int
+  mimeType        String
+  executionId     String?
+  stepId          String?
+  type            String? // "input" | "output" | "upload" и т.п. — если нужно
+  isConverted     Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  convertedFile   File?      @relation("ConvertedFile", fields: [convertedFileId], references: [id])
+  convertedFileId String?    @unique
+  execution       Execution? @relation(fields: [executionId], references: [id])
+  step            Step?      @relation(fields: [stepId], references: [id])
+  originalFile    File?      @relation("ConvertedFile")
 }

@@ -1,17 +1,29 @@
-import { Tool } from '../tool.interface';
+import { Tool, ToolInputSpecField } from "../tool.interface";
 
 export class TextTokenCountTool implements Tool {
-  name = 'text_token_count';
-  description = 'Подсчитывает примерное количество токенов в тексте';
+  name = "text_token_count";
+
+  description =
+      "Оценивает примерное количество токенов в тексте. " +
+      "Полезно для предварительной оценки объёма перед отправкой в LLM. " +
+      "Используется приближённая формула: 1 слово ≈ 1.33 токена.";
+
+  inputSpec: ToolInputSpecField[] = [
+    {
+      name: "text",
+      type: "string",
+      required: true,
+      description: "Текст, для которого нужно посчитать приблизительное количество токенов."
+    }
+  ];
 
   async run(input: { text: string }): Promise<string> {
     const { text } = input;
 
-    if (!text || typeof text !== 'string') {
-      return '❌ Пожалуйста, укажи текст';
+    if (!text || typeof text !== "string") {
+      return "❌ Пожалуйста, укажи текст";
     }
 
-    // Эвристика: 1 токен ≈ 0.75 слова (например, "Привет, мир!" → 3 слова → ~4 токена)
     const words = text.trim().split(/\s+/).length;
     const approxTokens = Math.ceil(words * 1.33);
 

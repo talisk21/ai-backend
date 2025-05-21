@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
+import { Injectable, Logger } from "@nestjs/common";
+import axios from "axios";
 
 @Injectable()
 export class ModelRegistryService {
@@ -15,18 +15,18 @@ export class ModelRegistryService {
     }
 
     try {
-      const response = await axios.get('https://openrouter.ai/api/v1/models', {
+      const response = await axios.get("https://openrouter.ai/api/v1/models", {
         headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        },
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`
+        }
       });
 
       this.modelsCache = response.data || [];
       this.lastFetchTime = now;
       return this.modelsCache;
     } catch (error) {
-      this.logger.error('Ошибка при получении моделей OpenRouter', error);
-      throw new Error('Failed to fetch models from OpenRouter');
+      this.logger.log("Ошибка при получении моделей OpenRouter", error);
+      throw new Error("Failed to fetch models from OpenRouter");
     }
   }
 

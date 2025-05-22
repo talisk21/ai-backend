@@ -62,7 +62,19 @@ import { PrismaService } from "../prisma/prisma.service";
 const prisma = new PrismaService();
 const mailService = new MailService(prisma);
 
-export const toolRegistry: Tool[] = [
+export class ToolRegistry {
+  private readonly tools: Tool[];
+
+  constructor(tools: Tool[]) {
+    this.tools = tools;
+  }
+
+  getAll(): Tool[] {
+    return this.tools;
+  }
+}
+
+export const toolRegistryInstance = new ToolRegistry([
   new UuidTool(),
   new GetTimeTool(),
   new MathTool(),
@@ -120,4 +132,4 @@ export const toolRegistry: Tool[] = [
   new JsonValidateTool(),
   new SendEmailTool(mailService),
   new FetchEmailTool(mailService)
-];
+]);

@@ -1,15 +1,14 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Tool, ToolInputSpecField } from "./tool.interface";
-import { toolRegistry } from "./tool-registry";
-
+import { ToolRegistry } from "./tool-registry";
 
 @Injectable()
 export class ToolExecutorService {
   private readonly tools: Map<string, Tool> = new Map();
   private readonly logger = new Logger(ToolExecutorService.name);
 
-  constructor() {
-    for (const tool of toolRegistry) {
+  constructor(private readonly registry: ToolRegistry) {
+    for (const tool of this.registry.getAll()) {
       this.tools.set(tool.name, tool);
     }
   }

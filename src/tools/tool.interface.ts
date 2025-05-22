@@ -11,6 +11,11 @@ export interface ToolInputSpecField {
   description?: string;
 }
 
+export interface ToolMetadata extends Omit<Tool, "inputSpec" | "run"> {
+  category?: string;
+  props: ToolInputSpecField[];
+}
+
 export interface Tool {
   name: string;
   description: string;

@@ -63,14 +63,15 @@ const prisma = new PrismaService();
 const mailService = new MailService(prisma);
 
 export class ToolRegistry {
-  private readonly tools: Tool[];
-
-  constructor(tools: Tool[]) {
-    this.tools = tools;
+  constructor(private readonly tools: Tool[]) {
   }
 
   getAll(): Tool[] {
     return this.tools;
+  }
+
+  getByName(name: string): Tool | undefined {
+    return this.tools.find((tool) => tool.name === name);
   }
 }
 

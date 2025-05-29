@@ -8,36 +8,45 @@ datasource db {
 }
 
 model Execution {
-  id        String   @id @default(uuid())
-  userId String @default("UI")
-  status    String
-  startedAt DateTime @default(now())
-  finishedAt DateTime?
-  steps     Step[]
-  files  File[]
+  id          String     @id @default(uuid())
+  userId      String     @default("UI")
+  status      String
+  startedAt   DateTime   @default(now())
+  finishedAt  DateTime?
+  steps       Step[]
+  files       File[]
+
+  templateId  String?                                // 🆕 ID шаблона маршрута
+  template    RouteTemplate? @relation(fields: [templateId], references: [id])
+  routeJson  Json?
 }
 
 model Step {
-  id          String    @id @default(uuid())
-  executionId String
-  type        String // "agent", "api", "tool"
-  input       Json
-  output      Json?
-  source      String?
-  userId      String?
-  error       String?
-  createdAt   DateTime  @default(now())
-  files       File[]
-  execution   Execution @relation(fields: [executionId], references: [id])
+  id            String     @id @default(uuid())
+  executionId   String
+  status        String?    // pending | in_progress | waiting_user_loop | done | error
+  type          String     // "agent", "api", "tool"
+  input         Json
+  output        Json?
+  source        String?
+  userId        String?
+  error         String?
+  createdAt     DateTime   @default(now())
+  files         File[]
+  execution     Execution  @relation(fields: [executionId], references: [id])
+
+  parentStepId  String?
+  parentStep    Step?      @relation("StepToStep", fields: [parentStepId], references: [id])
+  childSteps    Step[]     @relation("StepToStep")
 }
 
 model Log {
   id        String   @id @default(uuid())
   timestamp DateTime @default(now())
-  level    String
+  level     String
   message   String
-  context  String?
-  metadata Json?
+  context   String?
+  metadata  Json?
 }
 
 model RequestLog {
@@ -76,7 +85,7 @@ model File {
   mimeType        String
   executionId     String?
   stepId          String?
-  type            String? // "input" | "output" | "upload" и т.п. — если нужно
+  type            String? // "input" | "output" | "upload" и т.п.
   isConverted     Boolean    @default(false)
   createdAt       DateTime   @default(now())
   convertedFile   File?      @relation("ConvertedFile", fields: [convertedFileId], references: [id])
@@ -84,4 +93,19 @@ model File {
   execution       Execution? @relation(fields: [executionId], references: [id])
   step            Step?      @relation(fields: [stepId], references: [id])
   originalFile    File?      @relation("ConvertedFile")
+}
+
+model RouteTemplate {
+  id         String        @id @default(uuid())
+  name       String
+  type       String?       // Например: "linear", "conditional", "manual"
+  rawContent Json?         // сырой формат из UI
+  content    Json?         // обработанный JSON-маршрут
+  metadata   Json?         // метаданные
+  userId     String?
+  isPublic   Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  executions Execution[]    // 🔁 Связь с запусками маршрута
 }

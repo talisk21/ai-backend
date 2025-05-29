@@ -1,9 +1,12 @@
 export interface ChatMessage {
-  role: "user" | "system" | "assistant";
+  role: 'user' | 'system' | 'assistant';
   content:
     | string
-    | { type: "text"; text: string }[]
-    | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[];
+    | { type: 'text'; text: string }[]
+    | (
+        | { type: 'text'; text: string }
+        | { type: 'image_url'; image_url: { url: string } }
+      )[];
 
   file?: {
     name: string;

@@ -1,14 +1,11 @@
+import { InjectQueue, Process, Processor } from "@nestjs/bull";
 import { Injectable, Logger } from "@nestjs/common";
-import { Process, Processor } from "@nestjs/bull";
-import { Job } from "bull";
-import { STEP_QUEUE } from "./queue.constants";
-import { PrismaService } from "../prisma/prisma.service";
-import { AgentGatewayService } from "../agents/agent-gateway.service";
-import { LogService } from "../log/log.service";
-import { ToolExecutorService } from "../tools/tool-executor.service";
 import { Prisma } from "@prisma/client";
+import * as Services from "@services";
+import { Job, Queue } from "bull";
+import { STEP_QUEUE } from "./queue.constants";
 
-type ChatRole = "user" | "assistant";
+type ChatRole = 'user' | 'assistant';
 
 interface ChatMessage {
   role: ChatRole;
@@ -16,163 +13,106 @@ interface ChatMessage {
 }
 
 interface StepInput {
-  question: string;
+  question?: string; // используется только для самого первого сообщения
   model: string;
-  agent?: string; // 🆕 новый параметр
-}
-
-interface StepOutput {
-  result: string;
+  agent?: string;
+  messages?: ChatMessage[];
+  tools?: string[];
 }
 
 @Processor(STEP_QUEUE)
 @Injectable()
 export class StepProcessor {
-  private readonly logger = new Logger(StepProcessor.name);
+  private readonly context = StepProcessor.name;
+  private readonly logger = new Logger(this.context);
 
   constructor(
-    private prisma: PrismaService,
-    private agentGateway: AgentGatewayService,
-    private log: LogService,
-    private toolExecutor: ToolExecutorService
-  ) {
-  }
+    private readonly prisma: Services.PrismaService,
+    private readonly agentGateway: Services.AgentGatewayService,
+    private readonly log: Services.LogService,
+    private readonly toolProxy: Services.ToolProxyService,
+    private readonly executionsService: Services.ExecutionsService,
+    @InjectQueue(STEP_QUEUE) private readonly stepQueue: Queue,
+  ) {}
 
-  @Process("default")
-  async handleStep(job: Job) {
+  @Process('default')
+  async handleStep(job: Job<{ executionId: string; stepId: string }>) {
     const { stepId } = job.data;
-
     const step = await this.prisma.step.findUnique({ where: { id: stepId } });
+
     if (!step) {
-      const msg = `Step not found: ${stepId}`;
-      this.logger.log(`ℹ️ ${msg} | stepId: ${stepId}`, "StepProcessor");
-      await this.log.info(msg, "StepProcessor", { stepId });
+      const msg = `❌ Step не найден: ${stepId}`;
+      this.logger.warn(msg);
+      void this.log.info(msg, this.context, { stepId });
       return;
     }
 
     try {
       const input = step.input as unknown as StepInput;
-      const question = input.question?.trim();
       const model = input.model;
-      const agent = input.agent || step.type || "llm-tool-decision-agent"; // 🆕 приоритеты
+      const agent = input.agent || step.type || 'llm-tool-decision-agent';
+      const messages: ChatMessage[] = input.messages || [];
 
-      const startMsg = `▶️ Выполняется stepId: ${stepId} | model: ${model}`;
-      this.logger.log(
-        `▶️ ${startMsg} | stepId: ${stepId} | executionId: ${step.executionId} | model: ${model} | agent: ${agent} | input: ${question}`,
-        "StepProcessor"
-      );
-      await this.log.info(startMsg, "StepProcessor", {
-        stepId,
-        executionId: step.executionId,
-        model,
-        input: question,
-        agent
-      });
-
-      // === ВЫПОЛНЕНИЕ TOOL напрямую ===
-      if (question?.startsWith("tool:")) {
-        const [rawName, rawArgs] = question.split(/ (.+)/);
-        const name = rawName.replace("tool:", "").trim();
-
-        let args: any = {};
-        try {
-          args = rawArgs ? JSON.parse(rawArgs) : {};
-        } catch {
-          args = rawArgs?.trim();
-        }
-
-        this.logger.log(
-          `🛠 Tool вызван: "${name}" | stepId: ${stepId} | args: ${JSON.stringify(args)}`,
-          "StepProcessor"
-        );
-        await this.log.info(`Tool "${name}" args:`, "StepProcessor", { stepId, args });
-
-        const resultText = await this.toolExecutor.run(name, args);
-        const output: StepOutput = { result: resultText };
-
-        await this.prisma.step.update({
-          where: { id: stepId },
-          data: { output: output as unknown as Prisma.InputJsonValue }
-        });
-        this.logger.log(
-          `✅ Tool "${name}" выполнен | stepId: ${stepId} | output: ${JSON.stringify(output)}`,
-          "StepProcessor"
-        );
-        await this.log.info(`✅ Tool "${name}" выполнен`, "StepProcessor", { stepId, output });
-        return true;
+      // Если история ещё не началась — добавляем первое сообщение
+      if (!messages.length && input.question) {
+        messages.push({ role: 'user', content: input.question });
       }
 
-      // === История общения ===
-      const execution = await this.prisma.execution.findUnique({
-        where: { id: step.executionId },
-        include: { steps: { orderBy: { createdAt: "asc" } } }
-      });
+      // Обновляем input.messages
+      input.messages = messages;
 
-      const messages: ChatMessage[] = [];
+      const lastMessage = messages.at(-1)?.content ?? '';
 
-      for (const s of execution?.steps || []) {
-        const sInput = s.input as unknown as StepInput;
-        const sOutput = s.output as unknown as StepOutput;
-        if (sInput?.question && sOutput?.result) {
-          messages.push({ role: "user", content: sInput.question });
-          messages.push({ role: "assistant", content: sOutput.result });
-        }
-      }
-
-      messages.push({ role: "user", content: question });
-
-      this.logger.log(
-        `👤 Используется агент: ${agent} | stepId: ${stepId} | type: ${agent}`,
-        "StepProcessor"
-      );
-      await this.log.info(`👤 Используется агент: ${agent}`, "StepProcessor", {
-        stepId,
-        type: agent
-      });
+      this.logger.log(`🤖 Агент "${agent}", сообщений: ${messages.length}`);
+      void this.log.info(`🤖 Агент "${agent}"`, this.context, { stepId, agent });
 
       const resultText = await this.agentGateway.chat(
-        {
-          model,
-          prompt: question,
-          messages
-        },
-        agent
+        { model, prompt: lastMessage, messages },
+        agent,
       );
 
-      const output: StepOutput = { result: resultText };
+      // Добавляем ответ агента в историю
+      messages.push({ role: 'assistant', content: resultText });
+      input.messages = messages;
+
+      const isDone = resultText?.includes('__DONE__');
 
       await this.prisma.step.update({
         where: { id: stepId },
-        data: { output: output as unknown as Prisma.InputJsonValue }
+        data: {
+          input: input as unknown as Prisma.InputJsonValue,
+          output: { result: resultText } as Prisma.InputJsonValue,
+          status: isDone ? 'done' : 'waiting_user_loop',
+        },
       });
 
-      const doneMsg = `✅ Step выполнен: ${stepId}`;
-      this.logger.log(
-        `✅ Step выполнен | stepId: ${stepId} | result: ${resultText}`,
-        "StepProcessor"
-      );
-      await this.log.info(doneMsg, "StepProcessor", {
-        stepId,
-        result: resultText
-      });
+      const logMsg = isDone
+        ? '✅ Ответ от агента получен'
+        : '🕐 Ожидание ответа пользователя (waiting_user_loop)'
+
+      this.logger.log(logMsg);
+      void this.log.info(logMsg, this.context, { stepId });
+
+      if (isDone) {
+        const completeMsg = `🔁 Запуск onStepComplete для step ${stepId}`;
+        this.logger.log(completeMsg);
+        void this.log.info(completeMsg, this.context, { stepId });
+
+        await this.executionsService.onStepComplete(stepId);
+      }
 
       return true;
     } catch (error: any) {
       const errorMsg = `❌ Ошибка в step ${stepId}: ${error.message}`;
-      this.logger.log(errorMsg, error.stack);
+      this.logger.error(errorMsg, error.stack);
+      void this.log.error(errorMsg, this.context, { stepId });
+
       await this.prisma.step.update({
         where: { id: stepId },
-        data: { error: error.message || "Unknown error" }
+        data: { error: error.message || 'Unknown error', status: 'error' },
       });
-      this.logger.log(
-        `❌ Ошибка в step | stepId: ${stepId} | ${errorMsg}`,
-        error.stack,
-        "StepProcessor"
-      );
-      await this.log.info(errorMsg, "StepProcessor", {
-        stepId,
-        stack: error.stack
-      });
+
+      return false;
     }
   }
 }

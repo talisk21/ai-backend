@@ -1,8 +1,8 @@
-import { Injectable } from "@nestjs/common";
-import { Client } from "minio";
-import { PrismaService } from "../prisma/prisma.service";
-import { ConfigService } from "@nestjs/config"; // 🔹 импортируем
-import * as crypto from "crypto";
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as Services from '@services';
+import * as crypto from 'crypto';
+import { Client } from 'minio';
 
 @Injectable()
 export class FilesService {
@@ -10,25 +10,25 @@ export class FilesService {
   private bucket: string;
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService // ✅ добавили
+    private readonly prisma: Services.PrismaService,
+    private readonly config: ConfigService,
   ) {
     this.minio = new Client({
-      endPoint: this.config.get<string>("MINIO_HOST") ?? "localhost",
-      port: parseInt(this.config.get<string>("MINIO_PORT") ?? "9000", 10),
+      endPoint: this.config.get<string>('MINIO_HOST'),
+      port: parseInt(this.config.get<string>('MINIO_PORT'), 10),
       useSSL: false,
-      accessKey: this.config.get<string>("MINIO_ACCESS_KEY") ?? "minioadmin",
-      secretKey: this.config.get<string>("MINIO_SECRET_KEY") ?? "minioadmin"
+      accessKey: this.config.get<string>('MINIO_ACCESS_KEY'),
+      secretKey: this.config.get<string>('MINIO_SECRET_KEY'),
     });
 
-    this.bucket = this.config.get<string>("MINIO_BUCKET") ?? "files";
+    this.bucket = this.config.get<string>('MINIO_BUCKET');
     this.ensureBucket();
   }
 
   private async ensureBucket() {
     const exists = await this.minio.bucketExists(this.bucket);
     if (!exists) {
-      await this.minio.makeBucket(this.bucket, "us-east-1");
+      await this.minio.makeBucket(this.bucket, 'us-east-1');
     }
   }
 
@@ -36,15 +36,16 @@ export class FilesService {
     buffer: Buffer,
     name: string,
     mimeType: string,
-    meta: { executionId?: string; stepId?: string }
+    meta: { executionId?: string; stepId?: string },
   ) {
     const id = crypto.randomUUID();
     const filename = `${id}_${name}`;
 
     await this.minio.putObject(this.bucket, filename, buffer);
 
-    const endpoint = this.config.get<string>("MINIO_ENDPOINT"); // например: http://localhost:9000
-    const url = `${endpoint}/${this.bucket}/${filename}`;
+    const host = this.config.get<string>('MINIO_HOST');
+    const port = this.config.get<string>('MINIO_PORT');
+    const url = `${host}:${port}/${this.bucket}/${filename}`;
 
     return this.prisma.file.create({
       data: {
@@ -54,8 +55,8 @@ export class FilesService {
         size: buffer.length,
         mimeType,
         executionId: meta.executionId,
-        stepId: meta.stepId
-      }
+        stepId: meta.stepId,
+      },
     });
   }
 

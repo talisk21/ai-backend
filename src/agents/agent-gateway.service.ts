@@ -1,60 +1,46 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { OpenRouterService } from "./openrouter.service";
+import { LLmAgent, LlmToolAgent, LlmToolDecisionAgent, LogService } from "@services";
 import { Agent, AgentInput, AgentOutput } from "./agent.interface";
-import { LLmAgent } from "./llm-agent";
-import { LlmToolAgent } from "./llm-tool-agent";
-import { LlmToolDecisionAgent } from "./llm-tool-decision-agent";
-import { ToolExecutorService } from "../tools/tool-executor.service";
-import { LogService } from "../log/log.service";
-import { PromptLoader } from "./prompt-loader";
-import { ToolCallService } from "../tools/tool-call.service";
-import { ToolResponseParserService } from "../tools/tool-response-parser.service";
 
 @Injectable()
 export class AgentGatewayService {
   private readonly agents: Record<string, Agent>;
   private readonly logger = new Logger(AgentGatewayService.name);
+  private readonly context = 'AgentGatewayService';
 
   constructor(
-    private openRouter: OpenRouterService,
-    private tools: ToolExecutorService,
-    private log: LogService,
-    private promptLoader: PromptLoader,
-    private toolCallService: ToolCallService,
-    private toolResponseParser: ToolResponseParserService
+    private readonly llmAgent: LLmAgent,
+    private readonly llmToolAgent: LlmToolAgent,
+    private readonly llmToolDecisionAgent: LlmToolDecisionAgent,
+    private readonly log: LogService,
   ) {
     this.agents = {
-      "llm-agent": new LLmAgent(this.openRouter, this.log, this.promptLoader),
-      "llm-tool-agent": new LlmToolAgent(this.openRouter, this.tools, this.log, this.promptLoader, this.toolCallService,
-        this.toolResponseParser),
-      "llm-tool-decision-agent": new LlmToolDecisionAgent(this.openRouter, this.tools, this.log, this.promptLoader,
-        this.toolCallService, this.toolResponseParser)
+      'llm-agent': this.llmAgent,
+      'llm-tool-agent': this.llmToolAgent,
+      'llm-tool-decision-agent': this.llmToolDecisionAgent,
     };
   }
 
-  /**
-   * Выполнить запрос через заданного агента
-   */
   async chat(input: AgentInput, agentName: string): Promise<string> {
     const agent = this.agents[agentName];
-
     if (!agent) {
-      throw new Error(`❌ Агент "${agentName}" не найден`);
+      const errMsg = `❌ Агент "${agentName}" не найден`;
+      this.logger.error(errMsg, '', this.context);
+      void this.log.error(errMsg, this.context, { agentName });
+      throw new Error(errMsg);
     }
 
     const output: AgentOutput = await agent.run(input);
 
     if (output.usedTools?.length) {
-      this.logger.log(
-        `✅ Использован инструмент "${output.usedTools[0].name}"`,
-        "AgentGatewayService"
-      );
-      await this.log.info?.("✅ Использован инструмент", "AgentGatewayService", {
-        tool: output.usedTools[0].name
-      });
+      const toolName = output.usedTools[0].name;
+      const msg = `✅ Использован инструмент "${toolName}"`;
+      this.logger.log(msg, this.context);
+      void this.log.info(msg, this.context, { tool: toolName });
     } else {
-      this.logger.log("💬 Ответ без использования инструментов", "AgentGatewayService");
-      await this.log.info?.("💬 Ответ без использования инструментов", "AgentGatewayService");
+      const msg = '💬 Ответ без использования инструментов';
+      this.logger.log(msg, this.context);
+      void this.log.info(msg, this.context);
     }
 
     return output.result;

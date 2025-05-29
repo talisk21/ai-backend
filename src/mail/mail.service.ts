@@ -1,16 +1,17 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
-import { MailAccount } from "@prisma/client";
-import * as nodemailer from "nodemailer";
-import { ParsedMail, simpleParser } from "mailparser";
-import * as imap from "imap-simple";
+import { Injectable } from '@nestjs/common';
+import { MailAccount } from '@prisma/client';
+import * as Services from '@services';
+import * as imap from 'imap-simple';
+import { ParsedMail, simpleParser } from 'mailparser';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class MailService {
-  constructor(private readonly prisma: PrismaService) {
-  }
+  constructor(private readonly prisma: Services.PrismaService) {}
 
-  async createAccount(data: Omit<MailAccount, "id" | "createdAt" | "updatedAt">): Promise<MailAccount> {
+  async createAccount(
+    data: Omit<MailAccount, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<MailAccount> {
     return this.prisma.mailAccount.create({ data });
   }
 
@@ -20,7 +21,7 @@ export class MailService {
 
   async sendMail(
     accountId: string,
-    options: { to: string; subject: string; html?: string; text?: string }
+    options: { to: string; subject: string; html?: string; text?: string },
   ) {
     const account = await this.getAccount(accountId);
     const transporter = nodemailer.createTransport({
@@ -29,16 +30,16 @@ export class MailService {
       secure: account.smtpPort === 465,
       auth: {
         user: account.smtpUser,
-        pass: account.smtpPass
-      }
+        pass: account.smtpPass,
+      },
     });
 
     await transporter.sendMail({
       from: account.email,
-      ...options
+      ...options,
     });
 
-    return "📤 Письмо отправлено";
+    return '📤 Письмо отправлено';
   }
 
   async fetchMail(accountId: string): Promise<ParsedMail[]> {
@@ -51,16 +52,16 @@ export class MailService {
         host: account.imapHost,
         port: account.imapPort,
         tls: true,
-        authTimeout: 10000
-      }
+        authTimeout: 10000,
+      },
     });
 
-    await connection.openBox("INBOX");
+    await connection.openBox('INBOX');
 
-    const searchCriteria = ["ALL"];
+    const searchCriteria = ['ALL'];
     const fetchOptions = {
-      bodies: ["HEADER", "TEXT"],
-      markSeen: false
+      bodies: ['HEADER', 'TEXT'],
+      markSeen: false,
     };
 
     const messages = await connection.search(searchCriteria, fetchOptions);
@@ -68,7 +69,7 @@ export class MailService {
     const parsed: ParsedMail[] = [];
 
     for (const item of messages) {
-      const all = item.parts.find((p) => p.which === "TEXT");
+      const all = item.parts.find((p) => p.which === 'TEXT');
       if (!all) continue;
 
       const parsedMail = await simpleParser(all.body);

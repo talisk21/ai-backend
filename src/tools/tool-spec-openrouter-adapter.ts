@@ -1,53 +1,47 @@
-import { Injectable } from "@nestjs/common";
-import { ToolExecutorService } from "./tool-executor.service";
-import { ToolInputSpecField } from "./tool.interface";
+import { Injectable } from '@nestjs/common';
+import * as Services from '@services';
+import { OpenRouterToolInputSpecField } from './tool.interface';
 
 @Injectable()
 export class ToolSpecOpenRouterAdapter {
-  constructor(private readonly tools: ToolExecutorService) {
-  }
+  constructor(private readonly toolProxy: Services.ToolProxyService) {}
 
-  getToolFunctions(): any[] {
-    const toolList = this.tools.getToolList(); // name, description, spec[]
-
-    return toolList.map(tool => ({
-      type: "function",
+  async getToolFunctions(): Promise<any[]> {
+    const toolList = await this.toolProxy.getAllTools(); // name, description, spec[]
+    return toolList.map((tool) => ({
+      type: 'function',
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: this.convertSpecToSchema(tool.spec || [])
-      }
+        parameters: this.convertSpecToSchema(tool.spec || []),
+      },
     }));
   }
 
-  private convertSpecToSchema(spec: ToolInputSpecField[]): any {
+  private convertSpecToSchema(spec: OpenRouterToolInputSpecField[]): any {
     const properties: Record<string, any> = {};
     const required: string[] = [];
 
     for (const field of spec) {
-      let fieldSchema: any = {
+      const fieldSchema: any = {
         type: field.type,
-        description: field.description || ""
+        description: field.description || '',
       };
 
-      // 🧠 Обработка массивов: добавляем items
-      if (field.type === "array") {
+      if (field.type === 'array') {
         fieldSchema.items = {
-          type: field.itemsType || "string" // default fallback
+          type: field.itemsType || 'string',
         };
       }
 
       properties[field.name] = fieldSchema;
-
-      if (field.required) {
-        required.push(field.name);
-      }
+      if (field.required) required.push(field.name);
     }
 
     return {
-      type: "object",
+      type: 'object',
       properties,
-      required
+      required,
     };
   }
 }

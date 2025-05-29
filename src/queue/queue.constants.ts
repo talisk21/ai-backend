@@ -1,1 +1,1 @@
-export const STEP_QUEUE = "step-queue";
+export const STEP_QUEUE = 'step-queue';
